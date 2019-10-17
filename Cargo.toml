@@ -1,0 +1,10 @@
+[package]
+name = "rtcd"
+version = "0.1.0"
+authors = ["zzxx-husky <zzxx.is.me@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+timely="*"
+priority-queue="*"
+abomonation="*"
