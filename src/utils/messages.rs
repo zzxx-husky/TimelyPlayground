@@ -4,10 +4,11 @@ use abomonation::Abomonation;
 use std::cmp::Ordering;
 use std::hash::{Hasher, Hash};
 use timely::order::Product;
+use std::time::Duration;
 
 #[derive(Debug)]
 pub struct FetchRequestTimestamp {
-  pub timestamp: Product<usize, u32>,
+  pub timestamp: Product<u64, u32>,
 }
 
 impl Ord for FetchRequestTimestamp {
@@ -33,9 +34,11 @@ impl Eq for FetchRequestTimestamp {}
 
 #[derive(Clone, Debug)]
 pub struct UpdateRequest {
+  pub creation_time: Duration, // the creation time of the request, used for measuring per record latency
   pub src: u32,
   pub dst: u32,
-  pub is_addition: u32, // +1 -> add, -1 -> del
+  pub is_basic: bool, // is for basic graph or streaming graph
+//  pub is_addition: u32, // +1 for addition, -1 for deletion
 }
 
 #[derive(Clone, Debug)]
@@ -46,8 +49,8 @@ pub struct FetchRequest {
   // a pattern is being detected on multiple records
   pub operator_idx: usize,
   pub subgraph_idx: usize,
-  pub record_idx: usize,
-  pub time_span: usize,
+  //  pub record_idx: usize,
+  pub time_span: u64,
 }
 
 
@@ -56,7 +59,7 @@ pub struct FetchReply {
   pub worker_idx: usize,
   pub operator_idx: usize,
   pub subgraph_idx: usize,
-  pub record_idx: usize,
+  //  pub record_idx: usize,
   pub vertex_id: u32,
   pub neighbors: Vec<u32>,
 }
@@ -69,7 +72,7 @@ impl FetchRequest {
       worker_idx: self.worker_idx,
       operator_idx: self.operator_idx,
       subgraph_idx: self.subgraph_idx,
-      record_idx: self.record_idx,
+//      record_idx: self.record_idx,
       vertex_id: self.vertex_id,
       neighbors: neighbors,
     }
@@ -82,14 +85,15 @@ impl Hash for FetchRequest {
   fn hash<H>(&self, state: &mut H) where H: Hasher {
     state.write_usize(self.worker_idx);
     state.write_usize(self.operator_idx);
-    state.write_usize(self.record_idx);
+    state.write_usize(self.subgraph_idx);
+//    state.write_usize(self.record_idx);
     state.finish();
   }
 }
 
 impl PartialEq for FetchRequest {
   fn eq(&self, other: &FetchRequest) -> bool {
-    self.worker_idx == other.worker_idx && self.operator_idx == other.operator_idx && self.record_idx == other.record_idx
+    self.worker_idx == other.worker_idx && self.operator_idx == other.operator_idx && self.subgraph_idx == other.subgraph_idx
   }
 }
 

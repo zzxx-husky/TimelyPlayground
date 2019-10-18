@@ -12,18 +12,18 @@ pub struct CyclePattern {
   worker_idx: usize,
   operator_idx: usize,
   subgraph_idx: usize,
-  time_span: usize,
+  time_span: u64,
   max_cycle_length: u32,
   root: u32,
 
   // non-const
-  request_id: usize,
+//  request_id: usize,
   graph: HashMap<u32, Vertex>,
   pub num_pending_replies: usize,
 }
 
 impl CyclePattern {
-  pub fn create(worker_idx: usize, operator_idx: usize, subgraph_idx: usize, time_span: usize, max_cycle_length: u32) -> CyclePattern {
+  pub fn create(worker_idx: usize, operator_idx: usize, subgraph_idx: usize, time_span: u64, max_cycle_length: u32) -> CyclePattern {
     CyclePattern {
       worker_idx: worker_idx,
       operator_idx: operator_idx,
@@ -31,7 +31,6 @@ impl CyclePattern {
       time_span: time_span,
       max_cycle_length: max_cycle_length,
       root: 0,
-      request_id: 0,
       graph: HashMap::new(),
       num_pending_replies: 0,
     }
@@ -46,10 +45,10 @@ impl CyclePattern {
       worker_idx: self.worker_idx,
       operator_idx: self.operator_idx,
       subgraph_idx: self.subgraph_idx,
-      record_idx: self.request_id,
+//      record_idx: self.request_id,
       time_span: self.time_span,
     });
-    self.request_id += 1;
+//    self.request_id += 1;
     self.num_pending_replies += requests.len();
     requests
   }
@@ -79,10 +78,10 @@ impl CyclePattern {
                   worker_idx: self.worker_idx,
                   operator_idx: self.operator_idx,
                   subgraph_idx: self.subgraph_idx,
-                  record_idx: self.request_id,
+//                  record_idx: self.request_id,
                   time_span: self.time_span,
                 });
-                self.request_id += 1;
+//                self.request_id += 1;
               }
             }
           }
@@ -105,7 +104,7 @@ impl CyclePattern {
     } else {
       if self.graph[&imme_path[root_level]].neighbors.contains(&self.root) {
         imme_path.push(self.root);
-        println!("Found: {:?}", imme_path);
+        println!("Subgraph {}, Operator {}, Worker {}, Found: {:?}", self.subgraph_idx, self.operator_idx, self.worker_idx, imme_path);
         imme_path.pop();
       }
     }
