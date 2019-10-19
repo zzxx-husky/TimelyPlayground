@@ -34,7 +34,8 @@ impl Eq for FetchRequestTimestamp {}
 
 #[derive(Clone, Debug)]
 pub struct UpdateRequest {
-  pub creation_time: SystemTime, // the creation time of the request, used for measuring per record latency
+  // the creation time of the request, used for measuring per record latency
+  pub creation_time: SystemTime,
   pub src: u32,
   pub dst: u32,
   pub is_basic: bool, // is for basic graph or streaming graph

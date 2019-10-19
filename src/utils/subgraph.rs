@@ -9,7 +9,8 @@ struct Vertex {
 }
 
 pub struct CyclePattern {
-  creation_time: SystemTime, // the creation time of the request, used for measuring per record latency
+  // the creation time of the request, used for measuring per record latency
+  creation_time: SystemTime,
   // const
   worker_idx: usize,
   operator_idx: usize,
@@ -112,7 +113,7 @@ impl CyclePattern {
             num_results += self.recursive_detect(root_level + 1, imme_path);
             imme_path.pop();
           }
-        },
+        }
         None => {} // it's fine
       }
     } else {
@@ -124,7 +125,7 @@ impl CyclePattern {
             num_results += 1;
             imme_path.pop();
           }
-        },
+        }
         None => {} // it's fine
       }
     }

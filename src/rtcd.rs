@@ -57,27 +57,27 @@ Please provide the following configs in order:\n\
                 let src = iter.next().unwrap().parse::<u32>().unwrap();
                 let dst = iter.next().unwrap().parse::<u32>().unwrap();
                 edge_data.push((src, dst));
-    //            println!("{:?}", (src, dst));
-    //            std::thread::sleep(Duration::new(1, 0));
+                //            println!("{:?}", (src, dst));
+                //            std::thread::sleep(Duration::new(1, 0));
                 line.clear();
               }
-            },
+            }
             &"adj" => {
               panic!("Adj format is not recommended because it makes the edge updates to dense. Convert Adj to Edge instead.");
-              while let Ok(num_bytes) = reader.read_line(&mut line) {
-                if num_bytes == 0 {
-                  break;
-                }
-                let mut iter = line.split_whitespace();
-                let src = iter.next().unwrap().parse::<u32>().unwrap();
-                let num = iter.next().unwrap().parse::<u32>().unwrap();
-                for _i in 0..num {
-                  let dst = iter.next().unwrap().parse::<u32>().unwrap();
-                  edge_data.push((src, dst));
-                }
-                line.clear();
-              }
-            },
+//              while let Ok(num_bytes) = reader.read_line(&mut line) {
+//                if num_bytes == 0 {
+//                  break;
+//                }
+//                let mut iter = line.split_whitespace();
+//                let src = iter.next().unwrap().parse::<u32>().unwrap();
+//                let num = iter.next().unwrap().parse::<u32>().unwrap();
+//                for _i in 0..num {
+//                  let dst = iter.next().unwrap().parse::<u32>().unwrap();
+//                  edge_data.push((src, dst));
+//                }
+//                line.clear();
+//              }
+            }
             _ => panic!("Known format: ".to_owned() + format)
           }
         }
