@@ -27,43 +27,63 @@ pub fn rtcd() {
   let update_rate: usize;
   let num_configs: usize = 4;
   let mut args: Vec<String> = std::env::args().collect();
+  let expr_start_time = SystemTime::now();
   {
     assert!(args.len() > num_configs, "\n\n\
 Please provide the following configs in order:\n\
-  1. graph data file (in edge list format)\n\
+  1. graph format and graph data file, in the format 'adj:name' or 'edge:name'\n\
   2. the number of edges in the basic graph\n\
   3. the time spans in millis of patterns in the format 'n:span1,span2,span3,span_n'\n\
   4. update rate, i.e., num of overall edge updates per second\n\
 \n");
     {
-      let edge_data_file = &args[1];
+      let fmt_filename: Vec<_> = args[1].split(':').collect();
+      assert!(fmt_filename.len() == 2, "Invalid graph data file: ".to_owned() + &args[1]);
+      let format = &fmt_filename[0];
+      let edge_data_file = &fmt_filename[1];
       println!("Loading graph data {} into memory", edge_data_file);
+      let timer = Instant::now();
       match File::open(edge_data_file) {
         Ok(file) => {
           let mut reader = BufReader::new(file);
           let mut line = String::new();
-          while let Ok(num_bytes) = reader.read_line(&mut line) {
-            if num_bytes == 0 {
-              break;
-            }
-            let mut iter = line.split_whitespace();
-            let src = iter.next()
-              .expect(&*format!("Invalid edge: '{}'", line))
-              .parse::<u32>()
-              .expect(&*format!("Invalid edge: '{}'", line));
-            let dst = iter.next()
-              .expect(&*format!("Invalid edge: '{}'", line))
-              .parse::<u32>()
-              .expect(&*format!("Invalid edge: '{}'", line));
-            edge_data.push((src, dst));
-//            println!("{:?}", (src, dst));
-//            std::thread::sleep(Duration::new(1, 0));
-            line.clear();
+          match format {
+            &"edge" => {
+              while let Ok(num_bytes) = reader.read_line(&mut line) {
+                if num_bytes == 0 {
+                  break;
+                }
+                let mut iter = line.split_whitespace();
+                let src = iter.next().unwrap().parse::<u32>().unwrap();
+                let dst = iter.next().unwrap().parse::<u32>().unwrap();
+                edge_data.push((src, dst));
+    //            println!("{:?}", (src, dst));
+    //            std::thread::sleep(Duration::new(1, 0));
+                line.clear();
+              }
+            },
+            &"adj" => {
+              panic!("Adj format is not recommended because it makes the edge updates to dense. Convert Adj to Edge instead.");
+              while let Ok(num_bytes) = reader.read_line(&mut line) {
+                if num_bytes == 0 {
+                  break;
+                }
+                let mut iter = line.split_whitespace();
+                let src = iter.next().unwrap().parse::<u32>().unwrap();
+                let num = iter.next().unwrap().parse::<u32>().unwrap();
+                for _i in 0..num {
+                  let dst = iter.next().unwrap().parse::<u32>().unwrap();
+                  edge_data.push((src, dst));
+                }
+                line.clear();
+              }
+            },
+            _ => panic!("Known format: ".to_owned() + format)
           }
         }
         Err(e) => panic!(e)
       }
-      println!("Loaded graph data {}. Totally {} edges.", edge_data_file, edge_data.len());
+      println!("Loaded graph data {} within {:?}. Totally {} edges.", edge_data_file, timer.elapsed(), edge_data.len());
     }
     {
       num_edges_basic = args[2].parse::<usize>().expect(&*format!("Invalid number of edges for static graph: {}", args[2]));
@@ -146,7 +166,11 @@ Please provide the following configs in order:\n\
                     updates.for_each(|time, reqs| {
                       reqs.swap(&mut vector);
                       for u in vector.drain(..) {
-                        let mut graph = CyclePattern::create(worker_idx, operator_idx, subgraph_idx, time_span, 6);
+                        let mut graph = CyclePattern::create(u.creation_time,
+                                                             worker_idx,
+                                                             operator_idx,
+                                                             subgraph_idx,
+                                                             time_span, 6);
                         let mut requests = graph.add_starting_edge(&u);
                         subgraphs.insert(subgraph_idx, graph);
                         subgraph_idx += 1;
@@ -200,7 +224,7 @@ Please provide the following configs in order:\n\
                   updates.for_each(|time, reqs| {
                     reqs.swap(&mut vector);
                     for u in vector.drain(..) {
-                      println!("{:?} {:?}", *time.time(), u);
+                      // println!("{:?} {:?}", *time.time(), u);
                       adj_lists.entry(u.src).or_insert(BTreeMap::new()) // find the vertex
                         .entry(time.time().outer).or_insert(Vec::new()) // find the time
                         .push(u.dst); // add the new neighbor
@@ -209,6 +233,7 @@ Please provide the following configs in order:\n\
                 }
 
                 let frontier = updates.frontier(); // the update progress
+                // println!("{:?}", frontier);
                 {
                   let mut vector = Vec::new();
                   fetch_requests.for_each(|time, reqs| {
@@ -260,19 +285,27 @@ Please provide the following configs in order:\n\
     });
 
     // Send basic graph data
+    // We assign timestamp to records all based on expr_start_millis so as for consistency
     println!("Worker {} starts pushing static graph data.", worker_idx);
-    let expr_start_time = SystemTime::now();
     let expr_start_millis = expr_start_time.duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
+    let mut static_prog = 10;
     for i in 0..num_edges_basic {
       if i % num_workers == worker_idx {
         let rollback = (num_edges_basic - i) as f64 / num_edges_basic as f64 * (max_pattern_timespan as f64);
         input.advance_to(expr_start_millis - rollback as u64);
         input.send(UpdateRequest {
-          creation_time: SystemTime::now().duration_since(UNIX_EPOCH).unwrap(),
+          creation_time: SystemTime::now(),
           src: edge_data[i].0,
           dst: edge_data[i].1,
           is_basic: true,
         });
+        while probe.less_than(input.time()) {
+          worker.step();
+        }
+      }
+      if worker_idx == 0 && i * 100 / num_edges_basic == static_prog {
+        println!("{}({}{}) edges loaded.", i, static_prog, '%');
+        static_prog += 10;
       }
     }
     input.advance_to(expr_start_millis);
@@ -290,7 +323,7 @@ Please provide the following configs in order:\n\
           let advancement = (j - num_edges_basic) as f64 / update_rate as f64 * 1000f64;
           input.advance_to(expr_start_millis + advancement as u64);
           input.send(UpdateRequest {
-            creation_time: SystemTime::now().duration_since(UNIX_EPOCH).unwrap(),
+            creation_time: SystemTime::now(),
             src: edge_data[j].0,
             dst: edge_data[j].1,
             is_basic: false,

@@ -1,6 +1,7 @@
 use super::messages::*;
 
 use std::collections::HashMap;
+use std::time::SystemTime;
 
 struct Vertex {
   level: u32,
@@ -8,6 +9,7 @@ struct Vertex {
 }
 
 pub struct CyclePattern {
+  creation_time: SystemTime, // the creation time of the request, used for measuring per record latency
   // const
   worker_idx: usize,
   operator_idx: usize,
@@ -23,8 +25,14 @@ pub struct CyclePattern {
 }
 
 impl CyclePattern {
-  pub fn create(worker_idx: usize, operator_idx: usize, subgraph_idx: usize, time_span: u64, max_cycle_length: u32) -> CyclePattern {
+  pub fn create(creation_time: SystemTime,
+                worker_idx: usize,
+                operator_idx: usize,
+                subgraph_idx: usize,
+                time_span: u64,
+                max_cycle_length: u32) -> CyclePattern {
     CyclePattern {
+      creation_time: creation_time,
       worker_idx: worker_idx,
       operator_idx: operator_idx,
       subgraph_idx: subgraph_idx,
@@ -86,7 +94,7 @@ impl CyclePattern {
             }
           }
         }
-        None => panic!("There is bug hiding somewhere.")
+        None => panic!("There is BBBUUUGGG hiding somewhere.")
       }
     }
     self.graph.extend(new_vertices);
@@ -94,25 +102,39 @@ impl CyclePattern {
     new_requests
   }
 
-  fn recursive_detect(&self, root_level: usize, imme_path: &mut Vec<u32>) {
+  fn recursive_detect(&self, root_level: usize, imme_path: &mut Vec<u32>) -> u32 {
+    let mut num_results = 0;
     if root_level < 5 {
-      for n in self.graph[&imme_path[root_level]].neighbors.iter() {
-        imme_path.push(*n);
-        self.recursive_detect(root_level + 1, imme_path);
-        imme_path.pop();
+      match self.graph.get(&imme_path[root_level]) {
+        Some(node) => {
+          for n in node.neighbors.iter() {
+            imme_path.push(*n);
+            num_results += self.recursive_detect(root_level + 1, imme_path);
+            imme_path.pop();
+          }
+        },
+        None => {} // it's fine
       }
     } else {
-      if self.graph[&imme_path[root_level]].neighbors.contains(&self.root) {
-        imme_path.push(self.root);
-        println!("Subgraph {}, Operator {}, Worker {}, Found: {:?}", self.subgraph_idx, self.operator_idx, self.worker_idx, imme_path);
-        imme_path.pop();
+      match self.graph.get(&imme_path[root_level]) {
+        Some(node) => {
+          if node.neighbors.contains(&self.root) {
+            imme_path.push(self.root);
+            // println!("Subgraph {}, Operator {}, Worker {}, Found: {:?}", self.subgraph_idx, self.operator_idx, self.worker_idx, imme_path);
+            num_results += 1;
+            imme_path.pop();
+          }
+        },
+        None => {} // it's fine
       }
     }
+    num_results
   }
 
   pub fn detect_cycles(&self) {
     let mut imme_path = vec!(self.root);
-    self.recursive_detect(0, &mut imme_path);
+    let num_results = self.recursive_detect(0, &mut imme_path);
+    println!("Found {} using {}ms", num_results, SystemTime::now().duration_since(self.creation_time).unwrap().as_millis());
   }
 }
 

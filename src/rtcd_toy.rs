@@ -8,7 +8,7 @@ use priority_queue::PriorityQueue;
 use std::cmp::min;
 use std::collections::{HashMap, BTreeMap};
 use std::ops::Bound::Included;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::SystemTime;
 
 use timely::dataflow::{InputHandle, ProbeHandle};
 use timely::dataflow::operators::*;
@@ -81,7 +81,7 @@ pub fn rtcd() {
                       reqs.swap(&mut vector);
                       for u in vector.drain(..) {
 //                        println!("{:?} {:?}", time.time(), u);
-                        let mut graph = CyclePattern::create(worker_idx, operator_idx, subgraph_idx, time_span, 6);
+                        let mut graph = CyclePattern::create(u.creation_time, worker_idx, operator_idx, subgraph_idx, time_span, 6);
                         let mut requests = graph.add_starting_edge(&u);
                         subgraphs.insert(subgraph_idx, graph);
                         subgraph_idx += 1;
@@ -205,7 +205,7 @@ pub fn rtcd() {
       input.advance_to(i as u64);
       if i as usize % worker.peers() == worker_idx {
         input.send(UpdateRequest {
-          creation_time: expr_start_time.duration_since(UNIX_EPOCH).unwrap(),
+          creation_time: expr_start_time,
           src: i,
           dst: i + 1,
           is_basic: false,
@@ -214,7 +214,7 @@ pub fn rtcd() {
       if i >= 5 {
         if i as usize % worker.peers() == worker_idx {
           input.send(UpdateRequest {
-            creation_time: expr_start_time.duration_since(UNIX_EPOCH).unwrap(),
+            creation_time: expr_start_time,
             src: i,
             dst: i - 5,
             is_basic: false,
