@@ -5,6 +5,7 @@ use rand::thread_rng;
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 
+#[allow(dead_code)]
 pub fn adj2edge(adj_file: &String) {
   println!("Convering {} to edge file", adj_file);
 

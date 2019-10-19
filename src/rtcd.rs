@@ -318,11 +318,13 @@ Please provide the following configs in order:\n\
     for i in (num_edges_basic..edge_data.len()).step_by(update_rate) {
       let timer = Instant::now();
       let end_idx = min(edge_data.len(), i + update_rate);
+      let mut updates = Vec::new();
       for j in i..end_idx {
         if j % num_workers == worker_idx {
-          let advancement = (j - num_edges_basic) as f64 / update_rate as f64 * 1000f64;
-          input.advance_to(expr_start_millis + advancement as u64);
-          input.send(UpdateRequest {
+          // let advancement = (j - num_edges_basic) as f64 / update_rate as f64 * 1000f64;
+          // input.advance_to(expr_start_millis + advancement as u64);
+          // input.send(UpdateRequest {
+          updates.push(UpdateRequest {
             creation_time: SystemTime::now(),
             src: edge_data[j].0,
             dst: edge_data[j].1,
@@ -330,6 +332,7 @@ Please provide the following configs in order:\n\
           });
         }
       }
+      input.send_batch(&mut updates);
       input.advance_to(((end_idx - num_edges_basic) as f64 / update_rate as f64 * 1000f64) as u64 + expr_start_millis);
       println!("Worker {} pushed edge updates.", worker_idx);
       while probe.less_than(input.time()) {
