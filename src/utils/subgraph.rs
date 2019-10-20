@@ -10,7 +10,7 @@ struct Vertex {
 
 pub struct CyclePattern {
   // the creation time of the request, used for measuring per record latency
-  creation_time: SystemTime,
+  pub creation_time: SystemTime,
   // const
   worker_idx: usize,
   operator_idx: usize,
@@ -135,7 +135,7 @@ impl CyclePattern {
   pub fn detect_cycles(&self) {
     let mut imme_path = vec!(self.root);
     let num_results = self.recursive_detect(0, &mut imme_path);
-    println!("Found {} using {}ms", num_results, SystemTime::now().duration_since(self.creation_time).unwrap().as_millis());
+    // println!("Found {} using {}ms", num_results, SystemTime::now().duration_since(self.creation_time).unwrap().as_millis());
   }
 }
 

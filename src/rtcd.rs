@@ -10,7 +10,7 @@ use std::collections::{HashMap, BTreeMap};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::ops::Bound::Included;
-use std::time::{SystemTime, UNIX_EPOCH, Instant, Duration};
+use std::time::{SystemTime, Instant, Duration};
 
 use timely::dataflow::{InputHandle, ProbeHandle};
 use timely::dataflow::operators::*;
@@ -109,6 +109,7 @@ Please provide the following configs in order:\n\
     let mut probe = ProbeHandle::new();
     let worker_idx = worker.index();
     let num_workers = worker.peers();
+    println!("I am worker {} among {} workers.", worker_idx, num_workers);
 
     worker.dataflow::<u64, _, _>(|outer| {
       let outer_edge_updates = input.to_stream(outer);
@@ -138,6 +139,10 @@ Please provide the following configs in order:\n\
                 let mut subgraphs: HashMap<usize, CyclePattern> = HashMap::new();
                 let mut subgraph_idx = 0;
 
+                let mut sum_latencies = 0u128;
+                let mut cnt_latencies = 0;
+                let report_period = update_rate / num_workers + 1;
+
                 move |updates, replies, output| {
                   { // process replies first
                     let mut vector: Vec<FetchReply> = Vec::new();
@@ -150,6 +155,13 @@ Please provide the following configs in order:\n\
                             if requests.is_empty() {
                               if graph.num_pending_replies == 0 {
                                 graph.detect_cycles();
+                                sum_latencies += SystemTime::now().duration_since(graph.creation_time).unwrap().as_millis();
+                                cnt_latencies += 1;
+                                if cnt_latencies == report_period {
+                                  println!("latency: {}ms", sum_latencies as f64 / cnt_latencies as f64);
+                                  sum_latencies = 0;
+                                  cnt_latencies = 0;
+                                }
                                 subgraphs.remove(&r.subgraph_idx);
                               }
                             } else {
@@ -289,10 +301,14 @@ Please provide the following configs in order:\n\
     println!("Worker {} starts pushing static graph data.", worker_idx);
     let expr_start_millis = 1e16 as u64; // expr_start_time.duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
     let mut static_prog = 10;
+    let mut old_rollback = 0f64;
     for i in 0..num_edges_basic {
       if i % num_workers == worker_idx {
         let rollback = (num_edges_basic - i) as f64 / num_edges_basic as f64 * (max_pattern_timespan as f64);
-        input.advance_to(expr_start_millis - rollback as u64);
+        if old_rollback != rollback {
+          input.advance_to(expr_start_millis - rollback as u64);
+          old_rollback = rollback;
+        }
         input.send(UpdateRequest {
           creation_time: SystemTime::now(),
           src: edge_data[i].0,
@@ -345,4 +361,5 @@ Please provide the following configs in order:\n\
     }
     println!("Worker {} has done all the jobs!", worker_idx);
   }).unwrap();
+  println!("Now terminate");  
 }
