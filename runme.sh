@@ -1,14 +1,14 @@
 #cargo run --release --bin rtcd -- -w 1
 mode="--release"
-#app=toy
-app=twitter
+app=toy
+#app=twitter
 
 if [ "${app}" = "toy" ]; then
-  graph=edge:toy_graph.adj.edge
+  graph=edge:toy_graph.edge
   num_edge_static=5
   timespans='2:8000,6000'
   update_rate=2
-  num_workers=30
+  num_workers=2
 fi
 
 if [ "${app}" = "twitter" ]; then

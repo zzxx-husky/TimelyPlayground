@@ -287,7 +287,7 @@ Please provide the following configs in order:\n\
     // Send basic graph data
     // We assign timestamp to records all based on expr_start_millis so as for consistency
     println!("Worker {} starts pushing static graph data.", worker_idx);
-    let expr_start_millis = expr_start_time.duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
+    let expr_start_millis = 1e16 as u64; // expr_start_time.duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
     let mut static_prog = 10;
     for i in 0..num_edges_basic {
       if i % num_workers == worker_idx {
