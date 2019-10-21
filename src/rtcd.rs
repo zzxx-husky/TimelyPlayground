@@ -21,11 +21,12 @@ use timely::order::Product;
 pub fn rtcd() {
   let mut edge_data = Vec::new();
   let num_edges_basic: usize;
+  let num_edges_streaming: usize;
   let num_patterns: usize;
   let pattern_timespans: Vec<u64>;
   let max_pattern_timespan: u64;
   let update_rate: usize;
-  let num_configs: usize = 4;
+  let num_configs: usize = 5;
   let mut args: Vec<String> = std::env::args().collect();
   let expr_start_time = SystemTime::now();
   {
@@ -33,9 +34,16 @@ pub fn rtcd() {
 Please provide the following configs in order:\n\
   1. graph format and graph data file, in the format 'adj:name' or 'edge:name'\n\
   2. the number of edges in the basic graph\n\
-  3. the time spans in millis of patterns in the format 'n:span1,span2,span3,span_n'\n\
-  4. update rate, i.e., num of overall edge updates per second\n\
+  3. the number of edges for the streaming graph\n\
+  4. the time spans in millis of patterns in the format 'n:span1,span2,span3,span_n'\n\
+  5. update rate, i.e., num of overall edge updates per second\n\
 \n");
+    {
+      num_edges_basic = args[2].parse::<usize>().expect(&*format!("Invalid number of edges for static graph: {}", args[2]));
+      println!("Number of edges for static graph: {}", num_edges_basic);
+      num_edges_streaming = args[3].parse::<usize>().expect(&*format!("Invalid number of edges for streaming graph: {}", args[3]));
+      println!("Number of edges for streaming graph: {}", num_edges_streaming);
+    }
     {
       let fmt_filename: Vec<_> = args[1].split(':').collect();
       assert!(fmt_filename.len() == 2, "Invalid graph data file: ".to_owned() + &args[1]);
@@ -49,16 +57,17 @@ Please provide the following configs in order:\n\
           let mut line = String::new();
           match format {
             &"edge" => {
+              let num_edges = num_edges_basic + num_edges_streaming;
               while let Ok(num_bytes) = reader.read_line(&mut line) {
-                if num_bytes == 0 {
+                if num_bytes == 0 || edge_data.len() > num_edges {
                   break;
                 }
                 let mut iter = line.split_whitespace();
                 let src = iter.next().unwrap().parse::<u32>().unwrap();
                 let dst = iter.next().unwrap().parse::<u32>().unwrap();
                 edge_data.push((src, dst));
-                //            println!("{:?}", (src, dst));
-                //            std::thread::sleep(Duration::new(1, 0));
+//            println!("{:?}", (src, dst));
+//            std::thread::sleep(Duration::new(1, 0));
                 line.clear();
               }
             }
@@ -86,19 +95,15 @@ Please provide the following configs in order:\n\
       println!("Loaded graph data {} within {:?}. Totally {} edges.", edge_data_file, timer.elapsed(), edge_data.len());
     }
     {
-      num_edges_basic = args[2].parse::<usize>().expect(&*format!("Invalid number of edges for static graph: {}", args[2]));
-      println!("Number of edges for static graph: {}", num_edges_basic);
-    }
-    {
-      let n_timespans: Vec<_> = args[3].split(':').collect();
-      num_patterns = n_timespans[0].parse::<usize>().expect(&*format!("Invalid timespans: {}", args[3]));
+      let n_timespans: Vec<_> = args[4].split(':').collect();
+      num_patterns = n_timespans[0].parse::<usize>().expect(&*format!("Invalid timespans: {}", args[4]));
       pattern_timespans = n_timespans[1].split(',').map(|s| s.parse::<u64>().expect(&*format!("Invalid timespan: {}", s))).collect();
       assert!(num_patterns == pattern_timespans.len());
       max_pattern_timespan = *pattern_timespans.iter().max_by(|a, b| a.cmp(b)).unwrap();
       println!("Timespans for cycles: {:?}. Max: {} ms.", pattern_timespans, max_pattern_timespan);
     }
     {
-      update_rate = args[4].parse::<usize>().expect(&*format!("Invalid update rate: {}", args[4]));
+      update_rate = args[5].parse::<usize>().expect(&*format!("Invalid update rate: {}", args[5]));
       println!("Update rate: {} updates per second", update_rate);
     }
   }
@@ -354,6 +359,7 @@ Please provide the following configs in order:\n\
       while probe.less_than(input.time()) {
         worker.step();
       }
+      println!("Worker {} done for this batch.", worker_idx);
       let now_dur = timer.elapsed().as_millis() as u64;
       if 999 > now_dur { // give 1 ms to run the sleeping code
         std::thread::sleep(Duration::from_millis(999 - now_dur));

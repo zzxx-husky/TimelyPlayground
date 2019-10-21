@@ -1,11 +1,12 @@
 #cargo run --release --bin rtcd -- -w 1
 mode="--release"
-app=toy
-#app=twitter
+#app=toy
+app=twitter
 
 if [ "${app}" = "toy" ]; then
   graph=edge:toy_graph.edge
   num_edge_static=5
+  num_edge_streaming=$(bc -l <<< "$(wc -l ${toy_graph.edge})-${num_edge_static}")
   timespans='2:8000,6000'
   update_rate=2
   num_workers=2
@@ -16,6 +17,7 @@ if [ "${app}" = "twitter" ]; then
   num_edge_static=350000
   timespans='2:172800000,86400000'
   update_rate=15000
+  num_edge_streaming=$(bc -l <<< "60*${update_rate}")
   num_workers=30
 fi
 
@@ -33,6 +35,7 @@ cp -s ./logs/${log_datetime}.log latest.log
 RUST_BACKTRACE=1 cargo run ${mode} --bin rtcd --\
  ${graph}\
  ${num_edge_static}\
+ ${num_edge_streaming}\
  ${timespans}\
  ${update_rate}\
  -w ${num_workers}\

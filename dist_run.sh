@@ -2,6 +2,7 @@ scriptdir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 num_machines=10
 mode=--release
 #mode=
+expr_time=300 # seconds
 
 #graph=edge:${scriptdir}/toy_graph.edge
 #num_edge_static=5
@@ -10,7 +11,8 @@ mode=--release
 graph=edge:~/datasets/twitter.edge
 num_edge_static=350000
 timespans='2:172800000,86400000'
-update_rate=15000
+update_rate=3000
+num_edge_streaming=$(bc -l <<< "${expr_time}*${update_rate}")
 num_workers=10
 
 function gen_hostfile {
@@ -32,6 +34,7 @@ function local_run {
   RUST_BACKTRACE=full cargo run ${mode} --bin rtcd --\
     ${graph}\
     ${num_edge_static}\
+    ${num_edge_streaming}\
     ${timespans}\
     ${update_rate}\
     -w ${num_workers}\
