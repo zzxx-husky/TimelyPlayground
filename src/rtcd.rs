@@ -10,7 +10,7 @@ use std::collections::{HashMap, BTreeMap};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::ops::Bound::Included;
-use std::time::{SystemTime, Instant, Duration};
+use std::time::{SystemTime, Instant, Duration, UNIX_EPOCH};
 
 use timely::dataflow::{InputHandle, ProbeHandle};
 use timely::dataflow::operators::*;
@@ -144,13 +144,14 @@ Please provide the following configs in order:\n\
                 let mut subgraphs: HashMap<usize, CyclePattern> = HashMap::new();
                 let mut subgraph_idx = 0;
 
-                let mut sum_latencies = 0u128;
+                let mut sum_latencies = 0u64;
                 let mut cnt_latencies = 0;
+                let mut cnt_detection = 0;
                 let report_period = update_rate / num_workers + 1;
 
                 move |updates, replies, output| {
                   { // process replies first
-                    let mut vector: Vec<FetchReply> = Vec::new();
+                    let mut vector = Vec::new();
                     replies.for_each(|time, reqs| {
                       reqs.swap(&mut vector);
                       for r in vector.drain(..) {
@@ -159,11 +160,11 @@ Please provide the following configs in order:\n\
                             let mut requests = graph.on_reply(&r);
                             if requests.is_empty() {
                               if graph.num_pending_replies == 0 {
-                                graph.detect_cycles();
-                                sum_latencies += SystemTime::now().duration_since(graph.creation_time).unwrap().as_millis();
+                                cnt_detection += graph.detect_cycles();
+                                sum_latencies += SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64 - graph.creation_time;
                                 cnt_latencies += 1;
                                 if cnt_latencies == report_period {
-                                  println!("latency: {}ms", sum_latencies as f64 / cnt_latencies as f64);
+                                  println!("{}, latency: {}ms, found: {}", worker_idx, sum_latencies as f64 / cnt_latencies as f64, cnt_detection);
                                   sum_latencies = 0;
                                   cnt_latencies = 0;
                                 }
@@ -179,7 +180,7 @@ Please provide the following configs in order:\n\
                     });
                   }
                   {
-                    let mut vector: Vec<UpdateRequest> = Vec::new();
+                    let mut vector = Vec::new();
                     updates.for_each(|time, reqs| {
                       reqs.swap(&mut vector);
                       for u in vector.drain(..) {
@@ -304,18 +305,19 @@ Please provide the following configs in order:\n\
     // Send basic graph data
     // We assign timestamp to records all based on expr_start_millis so as for consistency
     println!("Worker {} starts pushing static graph data.", worker_idx);
-    let expr_start_millis = 1e16 as u64; // expr_start_time.duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
+    let expr_start_millis = max_pattern_timespan as u64; // expr_start_time.duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
     let mut static_prog = 10;
-    let mut old_rollback = 0f64;
+    let mut old_advance = 0u64;
     for i in 0..num_edges_basic {
       if i % num_workers == worker_idx {
         let rollback = (num_edges_basic - i) as f64 / num_edges_basic as f64 * (max_pattern_timespan as f64);
-        if old_rollback != rollback {
-          input.advance_to(expr_start_millis - rollback as u64);
-          old_rollback = rollback;
+        let new_advance = expr_start_millis - rollback as u64;
+        if old_advance < new_advance {
+          input.advance_to(new_advance);
+          old_advance = new_advance;
         }
         input.send(UpdateRequest {
-          creation_time: SystemTime::now(),
+          creation_time: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64,
           src: edge_data[i].0,
           dst: edge_data[i].1,
           is_basic: true,
@@ -329,7 +331,11 @@ Please provide the following configs in order:\n\
         static_prog += 10;
       }
     }
-    input.advance_to(expr_start_millis);
+    assert!(old_advance <= expr_start_millis, "Invalid watermark for basic graph");
+    if old_advance < expr_start_millis {
+      input.advance_to(expr_start_millis);
+      old_advance = expr_start_millis;
+    }
     while probe.less_than(input.time()) {
       worker.step();
     }
@@ -339,22 +345,21 @@ Please provide the following configs in order:\n\
     for i in (num_edges_basic..edge_data.len()).step_by(update_rate) {
       let timer = Instant::now();
       let end_idx = min(edge_data.len(), i + update_rate);
-      let mut updates = Vec::new();
-      for j in i..end_idx {
-        if j % num_workers == worker_idx {
-          // let advancement = (j - num_edges_basic) as f64 / update_rate as f64 * 1000f64;
-          // input.advance_to(expr_start_millis + advancement as u64);
-          // input.send(UpdateRequest {
-          updates.push(UpdateRequest {
-            creation_time: SystemTime::now(),
-            src: edge_data[j].0,
-            dst: edge_data[j].1,
-            is_basic: false,
-          });
-        }
-      }
+      let mut updates: Vec<_> = (i..end_idx)
+        .filter(|j| j % num_workers == worker_idx)
+        .map(|j| UpdateRequest {
+          creation_time: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64,
+          src: edge_data[j].0,
+          dst: edge_data[j].1,
+          is_basic: false,
+        })
+        .collect();
       input.send_batch(&mut updates);
-      input.advance_to(((end_idx - num_edges_basic) as f64 / update_rate as f64 * 1000f64) as u64 + expr_start_millis);
+      let new_advance = ((end_idx - num_edges_basic) as f64 / update_rate as f64 * 1000f64) as u64 + expr_start_millis;
+      if old_advance < new_advance {
+        input.advance_to(new_advance);
+        old_advance = new_advance;
+      }
       println!("Worker {} pushed edge updates.", worker_idx);
       while probe.less_than(input.time()) {
         worker.step();

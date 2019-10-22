@@ -1,7 +1,6 @@
 use super::messages::*;
 
 use std::collections::HashMap;
-use std::time::SystemTime;
 
 struct Vertex {
   level: u32,
@@ -10,7 +9,7 @@ struct Vertex {
 
 pub struct CyclePattern {
   // the creation time of the request, used for measuring per record latency
-  pub creation_time: SystemTime,
+  pub creation_time: u64,
   // const
   worker_idx: usize,
   operator_idx: usize,
@@ -26,7 +25,7 @@ pub struct CyclePattern {
 }
 
 impl CyclePattern {
-  pub fn create(creation_time: SystemTime,
+  pub fn create(creation_time: u64,
                 worker_idx: usize,
                 operator_idx: usize,
                 subgraph_idx: usize,
@@ -132,10 +131,11 @@ impl CyclePattern {
     num_results
   }
 
-  pub fn detect_cycles(&self) {
+  pub fn detect_cycles(&self) -> u32 {
     let mut imme_path = vec!(self.root);
     let num_results = self.recursive_detect(0, &mut imme_path);
     // println!("Found {} using {}ms", num_results, SystemTime::now().duration_since(self.creation_time).unwrap().as_millis());
+    num_results
   }
 }
 

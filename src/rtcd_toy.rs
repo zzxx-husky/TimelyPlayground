@@ -8,7 +8,7 @@ use priority_queue::PriorityQueue;
 use std::cmp::min;
 use std::collections::{HashMap, BTreeMap};
 use std::ops::Bound::Included;
-use std::time::SystemTime;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use timely::dataflow::{InputHandle, ProbeHandle};
 use timely::dataflow::operators::*;
@@ -200,7 +200,7 @@ pub fn rtcd() {
       });
     });
 
-    let expr_start_time = SystemTime::now();
+    let expr_start_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
     for i in 0u32..10 {
       input.advance_to(i as u64);
       if i as usize % worker.peers() == worker_idx {

@@ -16,7 +16,7 @@ if [ "${app}" = "twitter" ]; then
   graph=edge:~/datasets/twitter.edge
   num_edge_static=350000
   timespans='2:172800000,86400000'
-  update_rate=15000
+  update_rate=3000
   num_edge_streaming=$(bc -l <<< "60*${update_rate}")
   num_workers=30
 fi
