@@ -151,13 +151,13 @@ pub fn rtcd() {
                     for r in vector.drain(..) {
 //                    println!("{:?}", r);
                       if frontier.less_than(&ts) {
-                        let neighbors = adj_lists.entry(r.vertex_id).or_insert(BTreeMap::new()) // find the vertex
+                        let neighbors: Vec<_> = adj_lists.entry(r.vertex_id).or_insert(BTreeMap::new()) // find the vertex
                           .range((Included(t_outer - min(t_outer, r.time_span)), Included(t_outer)))
                           .flat_map(|e| e.1)
                           .map(|i| *i)
                           .collect();
 //                      println!("Reply {:?}", r);
-                        output.session(&t_cap).give(r.reply(neighbors));
+                        output.session(&t_cap).give(r.reply(&neighbors));
                       } else {
 //                      println!("Pending {:?}", r);
                         reqs.push(r);
@@ -178,7 +178,7 @@ pub fn rtcd() {
                   if !frontier.less_equal(&ts) { // t < U ==> U > t ==> !(U <=t)
                     let cap = &(req.0).0;
                     for r in &(req.0).1 {
-                      let neighbors = adj_lists.entry(r.vertex_id).or_insert(BTreeMap::new()) // find the vertex
+                      let neighbors: Vec<_> = adj_lists.entry(r.vertex_id).or_insert(BTreeMap::new()) // find the vertex
                         .range((Included(t_outer - min(t_outer, r.time_span)), Included(t_outer)))
                         .flat_map(|e| e.1)
                         .map(|i| *i)
@@ -187,7 +187,7 @@ pub fn rtcd() {
 //                      println!("{:?} {:?} {:?}", (Included(time - min(time, r.time_span)), Included(time)), neighbors, adj_lists);
 //                    }
 //                    println!("Reply pending {:?}", r);
-                      output.session(&cap).give(r.reply(neighbors));
+                      output.session(&cap).give(r.reply(&neighbors));
                     }
                     pending_requests.pop();
                   } else {

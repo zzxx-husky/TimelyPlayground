@@ -59,7 +59,7 @@ pub struct FetchReply {
 }
 
 impl FetchRequest {
-  pub fn reply(&self, neighbors: Vec<u32>) -> FetchReply {
+  pub fn reply(&self, neighbors: &Vec<u32>) -> FetchReply {
     FetchReply {
       worker_idx: self.worker_idx,
       operator_idx: self.operator_idx,

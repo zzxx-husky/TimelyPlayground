@@ -1,0 +1,7 @@
+file="./logs/worker21.log"
+
+if [ "A$1A" != "AA" ]; then
+  file=$1
+fi
+
+watch --interval=3 "tail -n 40 ${file}"

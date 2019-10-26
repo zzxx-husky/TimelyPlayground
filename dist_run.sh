@@ -12,11 +12,11 @@ expr_time=300 # seconds
 #timespans='2:6000,8000'
 #update_rate=2
 graph=edge:~/datasets/twitter.edge
-num_edge_static=350000
-timespans='2:172800000,86400000'
-update_rate=3000
+num_edge_static=3500000
+timespans='3:3#172800000,4#86400000,5#43200000'
+update_rate=10000
 num_edge_streaming=$(bc -l <<< "${expr_time}*${update_rate}")
-num_workers=10
+num_workers=5
 
 function gen_hostfile {
   rm hostfile
@@ -45,8 +45,8 @@ function local_run {
     -w ${num_workers}\
     -h ${scriptdir}/hostfile\
     -n ${num_machines}\
-    -p $(bc -l <<< $(echo $(hostname) | sed s/worker//)-21)\
-    2>&1 | tee -a ${scriptdir}/logs/$(hostname).log
+    -p $(bc -l <<< $(echo $(hostname) | sed s/worker//)-21) \
+    > ${scriptdir}/logs/$(hostname).log 2>&1
 }
 
 function dist_run {
