@@ -1,6 +1,9 @@
 use super::messages::*;
 
 use std::collections::HashMap;
+use std::cell::RefCell;
+use std::rc::Rc;
+//use core::borrow::{Borrow, BorrowMut};
 
 struct Vertex {
   level: u32,
@@ -20,7 +23,7 @@ pub struct CyclePattern {
 
   // non-const
   // request_id: usize,
-  graph: HashMap<u32, Vertex>,
+  graph: HashMap<u32, Rc<RefCell<Box<Vertex>>>>,
   pub num_pending_replies: usize,
 }
 
@@ -45,8 +48,8 @@ impl CyclePattern {
   }
 
   pub fn add_starting_edge(&mut self, u: &UpdateRequest) -> Vec<FetchRequest> {
-    self.graph.insert(u.src, Vertex { level: 0, neighbors: vec!(u.dst) });
-    self.graph.insert(u.dst, Vertex { level: 1, neighbors: Vec::new() });
+    self.graph.insert(u.src, Rc::new(RefCell::new(Box::new(Vertex { level: 0, neighbors: vec!(u.dst) }))));
+    self.graph.insert(u.dst, Rc::new(RefCell::new(Box::new(Vertex { level: 1, neighbors: Vec::new() }))));
     self.root = u.src;
     let requests = vec!(FetchRequest {
       vertex_id: u.dst,
@@ -61,28 +64,70 @@ impl CyclePattern {
     requests
   }
 
+  fn recursive_trigger(&mut self, x: Rc<RefCell<Box<Vertex>>>, id: u32, level: u32, new_requests: &mut Vec<FetchRequest>) {
+    let cur_level = (*x).borrow().level;
+    if cur_level > (level + 1) {
+      if cur_level == self.max_cycle_length {
+        new_requests.push(FetchRequest {
+          vertex_id: id,
+          worker_idx: self.worker_idx,
+          operator_idx: self.operator_idx,
+          subgraph_idx: self.subgraph_idx,
+          time_span: self.time_span,
+        });
+      }
+      {
+        (*x).borrow_mut().level = level + 1;
+      }
+      for n in (*x).borrow().neighbors.iter() {
+        let neighbor = Rc::clone(self.graph.get(&n).unwrap());
+        self.recursive_trigger(neighbor, *n, (*x).borrow().level, new_requests);
+      }
+    }
+  }
+
   pub fn on_reply(&mut self, r: &FetchReply) -> Vec<FetchRequest> {
     self.num_pending_replies -= 1;
     let mut new_requests = Vec::new();
     let mut new_vertices = Vec::new();
-    let mut lvldown_vtx: Vec<u32> = Vec::new();
     {
-      let mut v = self.graph.get_mut(&r.vertex_id)
-        .expect("Failed to find the vertex that makes the request");
-      v.neighbors = r.neighbors.clone();
-      let v_level = v.level; // not to ref to v ...
+      let v = Rc::clone(self.graph.get_mut(&r.vertex_id)
+        .expect("Failed to find the vertex that makes the request"));
+      {
+        (*v).borrow_mut().neighbors = r.neighbors.clone();
+      }
+      let v_level = (*v).borrow().level; // not to ref to v ...
       if v_level < self.max_cycle_length {
+//        for n in r.neighbors.iter() {
+//          match self.graph.get_mut(&n) {
+//          // if !self.graph.contains_key(n) {
+//            Some(x) => {
+//              if x.level > v_level + 1 {
+//                x.level = v_level + 1;
+//                lvldown_vtx.push(*n);
+//              }
+//            },
+//            None => {
+//              new_vertices.push((*n, Vertex { level: v_level + 1, neighbors: Vec::new() }));
+//              new_requests.push(FetchRequest {
+//                vertex_id: *n,
+//                worker_idx: self.worker_idx,
+//                operator_idx: self.operator_idx,
+//                subgraph_idx: self.subgraph_idx,
+//                time_span: self.time_span,
+//              });
+//            }
+//          }
+//        }
         for n in r.neighbors.iter() {
-          match self.graph.get_mut(&n) {
-          // if !self.graph.contains_key(n) {
-            Some(x) => {
-              if x.level > v_level + 1 {
-                x.level = v_level + 1;
-                lvldown_vtx.push(*n);
-              }
+          let exist = self.graph.contains_key(n);
+          match exist {
+            true => {
+              let neighbor = Rc::clone(self.graph.get(n).unwrap());
+              self.recursive_trigger(neighbor, *n, v_level, &mut new_requests);
             },
-            None => {
-              new_vertices.push((*n, Vertex { level: v_level + 1, neighbors: Vec::new() }));
+            false => {
+              new_vertices.push((*n, Rc::new(RefCell::new(Box::new(Vertex { level: v_level + 1, neighbors: Vec::new() })))));
               new_requests.push(FetchRequest {
                 vertex_id: *n,
                 worker_idx: self.worker_idx,
@@ -143,7 +188,7 @@ impl CyclePattern {
     if root_level < self.max_cycle_length as usize - 1 {
       match self.graph.get(&imme_path[root_level]) {
         Some(node) => {
-          for n in node.neighbors.iter() {
+          for n in (*(*node)).borrow().neighbors.iter() {
             imme_path.push(*n);
             num_results += self.recursive_detect(root_level + 1, imme_path);
             imme_path.pop();
@@ -154,7 +199,7 @@ impl CyclePattern {
     } else {
       match self.graph.get(&imme_path[root_level]) {
         Some(node) => {
-          if node.neighbors.contains(&self.root) {
+          if (*(*node)).borrow().neighbors.contains(&self.root) {
             imme_path.push(self.root);
             // println!("Subgraph {}, Operator {}, Worker {}, Found: {:?}", self.subgraph_idx, self.operator_idx, self.worker_idx, imme_path);
             // println!("Found: {:?}", imme_path);
