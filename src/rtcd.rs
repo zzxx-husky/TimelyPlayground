@@ -148,7 +148,8 @@ Please provide the following configs in order:\n\
             .filter(|u: &UpdateRequest| !u.is_basic)
             .binary_frontier(
               &reply_router,
-              Exchange::new(|u: &UpdateRequest| u.src as u64),
+              //Exchange::new(|u: &UpdateRequest| u.src as u64),
+              Pipeline,
               Exchange::new(|r: &FetchReply| r.worker_idx as u64),
               &("DetectionOnSpan:".to_string() + &time_span_value.to_string()),
               |_capability, _info| {
@@ -177,7 +178,8 @@ Please provide the following configs in order:\n\
                                 unsafe {
                                   NUM_DETECTIONS[qid][worker_idx] += num;
                                 }
-                                sum_latencies += SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64 - graph.creation_time;
+                                let cur_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
+                                sum_latencies += cur_time - graph.creation_time;
                                 cnt_latencies += 1;
                                 if cnt_latencies == report_period {
                                   println!("{}, latency: {}ms", qid, sum_latencies as f64 / cnt_latencies as f64);
@@ -279,7 +281,7 @@ Please provide the following configs in order:\n\
                     let t_cap = time.retain();
                     let mut reqs = Vec::new();
                     for r in vector.drain(..) {
-                      if frontier.less_than(&ts) {
+                      if !frontier.less_equal(&ts) {
                         let neighbors: Vec<_> = adj_lists.entry(r.vertex_id).or_insert(BTreeMap::new()) // find the vertex
                           .range((Included(t_outer - r.time_span), Included(t_outer)))
                           .flat_map(|e| e.1)
