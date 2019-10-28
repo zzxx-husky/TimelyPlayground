@@ -97,28 +97,6 @@ impl CyclePattern {
         (*v).borrow_mut().neighbors = r.neighbors.clone();
       }
       let v_level = (*v).borrow().level; // not to ref to v ...
-      if v_level < self.max_cycle_length {
-//        for n in r.neighbors.iter() {
-//          match self.graph.get_mut(&n) {
-//          // if !self.graph.contains_key(n) {
-//            Some(x) => {
-//              if x.level > v_level + 1 {
-//                x.level = v_level + 1;
-//                lvldown_vtx.push(*n);
-//              }
-//            },
-//            None => {
-//              new_vertices.push((*n, Vertex { level: v_level + 1, neighbors: Vec::new() }));
-//              new_requests.push(FetchRequest {
-//                vertex_id: *n,
-//                worker_idx: self.worker_idx,
-//                operator_idx: self.operator_idx,
-//                subgraph_idx: self.subgraph_idx,
-//                time_span: self.time_span,
-//              });
-//            }
-//          }
-//        }
         for n in r.neighbors.iter() {
           let exist = self.graph.contains_key(n);
           match exist {
@@ -128,55 +106,19 @@ impl CyclePattern {
             },
             false => {
               new_vertices.push((*n, Rc::new(RefCell::new(Box::new(Vertex { level: v_level + 1, neighbors: Vec::new() })))));
-              new_requests.push(FetchRequest {
-                vertex_id: *n,
-                worker_idx: self.worker_idx,
-                operator_idx: self.operator_idx,
-                subgraph_idx: self.subgraph_idx,
-                time_span: self.time_span,
-              });
+              if v_level < self.max_cycle_length {
+                new_requests.push(FetchRequest {
+                  vertex_id: *n,
+                  worker_idx: self.worker_idx,
+                  operator_idx: self.operator_idx,
+                  subgraph_idx: self.subgraph_idx,
+                  time_span: self.time_span,
+                });
+              }
             }
           }
         }
-      }
     }
-    // Note that some early requests may arrive late, where a neighbor of a vertex with level x may be assigned a level larger than x+1.
-    // The code below is try to fix the problem.
-    // {
-    //   while let Some(xi) = lvldown_vtx.pop() {
-    //     let x = self.graph.get_mut(&xi).expect("There must be a BBBUUUGGG");
-    //     let x_level = x.level;
-    //     let vec = x.neighbors.clone(); // rust makes me clone, sorry
-    //     for ni in vec.iter() {
-    //       match self.graph.get_mut(ni) {
-    //         Some(n) => {
-    //           if n.level > x_level + 1 {
-    //             if n.level == self.max_cycle_length {
-    //               new_requests.push(FetchRequest {
-    //                 vertex_id: *ni,
-    //                 worker_idx: self.worker_idx,
-    //                 operator_idx: self.operator_idx,
-    //                 subgraph_idx: self.subgraph_idx,
-    //                 time_span: self.time_span,
-    //               });
-    //             }
-    //             n.level = x_level + 1;
-    //           }
-    //         },
-    //         None => {
-    //           new_vertices.push((*ni, Vertex { level: x_level + 1, neighbors: Vec::new() }));
-    //           new_requests.push(FetchRequest {
-    //             vertex_id: *ni,
-    //             worker_idx: self.worker_idx,
-    //             operator_idx: self.operator_idx,
-    //             subgraph_idx: self.subgraph_idx,
-    //             time_span: self.time_span,
-    //           });
-    //         }
-    //       }
-    //     }
-    //   }
-    // }
     self.graph.extend(new_vertices);
     self.num_pending_replies += new_requests.len();
     new_requests
